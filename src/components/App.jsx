@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, { useState, useEffect } from 'react';
 import { fetchImages } from './fetchImages/fetchImages';
 import { SearchBar } from './SearchBar/SearchBar';
 import { ImagePending } from './ImageStatuses/ImagePending';
@@ -10,114 +10,106 @@ import './App.css';
 
 let page = 1;
 
-export class App extends Component {
-  state = {
-    inputData: '',
-    items: [],
+export const App = () => {
+  const [inputData, setInputData] = useState('');
+  const [items, setItems] = useState([]);
+  const [status, setStatus] = useState('idle');
+  const [totalHits, setTotalHits] = useState(0);
+  const [shouldScroll, setShouldScroll] = useState(false);
 
-    status: 'idle',
-    totalHits: 0,
-  };
-
-  handleSubmit = async inputData => {
+  const handleSubmit = async inputData => {
     page = 1;
     if (inputData.trim() === '') {
       return toast.error('You cannot search by empty field, try again.');
     } else {
       try {
-        this.setState({ status: 'pending' });
+        setStatus({ status: 'pending' });
         const { totalHits, hits } = await fetchImages(inputData, page);
         if (hits.length < 1) {
-          this.setState({ status: 'idle' });
+          setStatus({ status: 'idle' });
           return toast.warn(
             'Sorry, there are no images matching your search query. Please try again.'
           );
         } else {
-          this.setState({
-            items: hits,
-            inputData,
-            totalHits: totalHits,
-            status: 'resolved',
-          });
+          setItems(hits);
+          setInputData(inputData);
+          setTotalHits(totalHits);
+          setStatus('resolved');
         }
       } catch (error) {
-        this.setState({ status: 'rejected' });
+        setStatus('rejected');
       }
     }
   };
 
-  onNextPage = async () => {
-    this.setState({ status: 'pending' });
+  const onNextPage = async () => {
+    setStatus('pending');
 
     try {
-      const { hits } = await fetchImages(this.state.inputData, (page += 1));
-      this.setState(
-        prevState => ({
-          items: [...prevState.items, ...hits],
-          status: 'resolved',
-        }),
-        () => {
-          window.scrollTo({
-            top: document.documentElement.scrollHeight,
-            behavior: 'smooth',
-          });
-        }
-      );
+      const { hits } = await fetchImages(inputData, (page += 1));
+      setItems(prevItems => [...prevItems, ...hits]);
+      setStatus('resolved');
+      setShouldScroll(true);
     } catch (error) {
-      this.setState({ status: 'rejected' });
+      setStatus('rejected');
     }
   };
 
-  render() {
-    const { totalHits, status } = this.state;
-    if (status === 'idle') {
-      return (
-        <>
-          <ToastContainer />
-          <SearchBar onSubmit={this.handleSubmit} />
-        </>
-      );
+  useEffect(() => {
+    if (shouldScroll) {
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: 'smooth',
+      });
+      setShouldScroll(false);
     }
+  }, [shouldScroll]);
 
-    if (status === 'pending') {
-      return (
-        <>
-          <ToastContainer />
-          <ImagePending
-            onSubmit={this.handleSubmit}
-            page={page}
-            items={this.state.items}
-            totalHits={totalHits}
-            onNextPage={this.onNextPage}
-          />
-        </>
-      );
-    }
-
-    if (status === 'rejected') {
-      return (
-        <>
-          <ToastContainer />
-          <ImageRejected onSubmit={this.handleSubmit} />;
-        </>
-      );
-    }
-
-    if (status === 'resolved') {
-      return (
-        <>
-          <ToastContainer />
-          <ImageResolved
-            onSubmit={this.handleSubmit}
-            page={page}
-            items={this.state.items}
-            totalHits={totalHits}
-            onNextPage={this.onNextPage}
-          />
-        </>
-      );
-    }
+  if (status === 'idle') {
+    return (
+      <>
+        <ToastContainer />
+        <SearchBar onSubmit={handleSubmit} />
+      </>
+    );
   }
-}
 
-export default App;
+  if (status === 'pending') {
+    return (
+      <>
+        <ToastContainer />
+        <ImagePending
+          onSubmit={handleSubmit}
+          page={page}
+          items={items}
+          totalHits={totalHits}
+          onNextPage={onNextPage}
+        />
+      </>
+    );
+  }
+
+  if (status === 'rejected') {
+    return (
+      <>
+        <ToastContainer />
+        <ImageRejected onSubmit={handleSubmit} />;
+      </>
+    );
+  }
+
+  if (status === 'resolved') {
+    return (
+      <>
+        <ToastContainer />
+        <ImageResolved
+          onSubmit={handleSubmit}
+          page={page}
+          items={items}
+          totalHits={totalHits}
+          onNextPage={onNextPage}
+        />
+      </>
+    );
+  }
+};
